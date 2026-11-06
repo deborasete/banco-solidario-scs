@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.coverage
+coverage.xml
+*.db
+.env
+# Node / Angular
+node_modules/
+dist/
+.angular/
