@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Back-end (lint, testes e auditoria)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bss
+          POSTGRES_PASSWORD: bss
+          POSTGRES_DB: banco_solidario
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bss" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check app tests
+      - name: Testes unitários e de integração com cobertura mínima de 80%
+        run: pytest --cov=app --cov-report=term-missing --cov-report=xml
+      - name: Smoke test com PostgreSQL real
+        env:
+          BSS_DATABASE_URL: postgresql+psycopg://bss:bss@localhost:5432/banco_solidario
+          BSS_JWT_SECRET: ci-apenas-chave-de-teste-com-mais-de-32-bytes
+        run: |
+          python -m app.seed --email ci@exemplo.org --senha "Ci-Senha-Forte-2026" --demo
+          uvicorn app.main:app --port 8000 &
+          sleep 5
+          curl --fail http://localhost:8000/health
+      - name: Auditoria de dependências (pip-audit)
+        run: pip-audit -r requirements.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-backend
+          path: backend/coverage.xml
+
+  frontend:
+    name: Front-end (build e testes)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build de produção (PWA)
+        run: npx ng build
+      - name: Testes unitários (Karma + Chrome headless)
+        run: npx ng test --watch=false
+      - name: Auditoria de dependências (npm audit)
+        run: npm audit --omit=dev --audit-level=high
