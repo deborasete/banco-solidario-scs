@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bss
+      POSTGRES_PASSWORD: bss
+      POSTGRES_DB: banco_solidario
+    ports: ["5432:5432"]
+    volumes: [dados:/var/lib/postgresql/data]
+  api:
+    build: ./backend
+    environment:
+      BSS_DATABASE_URL: postgresql+psycopg://bss:bss@db:5432/banco_solidario
+      BSS_JWT_SECRET: ${BSS_JWT_SECRET:-desenvolvimento-local-troque-esta-chave-0000}
+      BSS_CORS_ORIGINS: '["http://localhost:4200"]'
+    ports: ["8000:8000"]
+    depends_on: [db]
+volumes:
+  dados:
