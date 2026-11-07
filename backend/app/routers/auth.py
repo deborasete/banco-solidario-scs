@@ -23,23 +23,23 @@ MSG_INVALIDO = "E-mail ou senha inválidos"
 @router.post("/login", response_model=TokenOut)
 def login(dados: LoginIn, request: Request, db: Session = Depends(get_db)):
     chaves = [f"email:{dados.email.lower()}", f"ip:{request.client.host if request.client else '-'}"]
-    if any(limitador.bloqueado(c) for c in chaves):
+    if any(limitador.bloqueado(db, c) for c in chaves):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Tente novamente em 15 minutos.")
     usuario = db.scalar(select(Usuario).where(Usuario.email == dados.email.lower()))
     if usuario is None or not usuario.ativo or not verificar_senha(dados.senha, usuario.senha_hash):
         for c in chaves:
-            limitador.registrar_falha(c)
+            limitador.registrar_falha(db, c)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, MSG_INVALIDO)
     for c in chaves:
-        limitador.limpar(c)
+        limitador.limpar(db, c)
     token = criar_token(usuario.id, usuario.perfil.value, usuario.entidade_id)
     return TokenOut(access_token=token, perfil=usuario.perfil, nome=usuario.nome)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(usuario: Usuario = Depends(usuario_atual)):
+def logout(usuario: Usuario = Depends(usuario_atual), db: Session = Depends(get_db)):
     p = usuario._token_payload
-    revogacao.revogar(p["jti"], float(p["exp"]))
+    revogacao.revogar(db, p["jti"], float(p["exp"]))
 
 
 @router.get("/me", response_model=UsuarioOut)
