@@ -44,6 +44,9 @@ jobs:
           uvicorn app.main:app --port 8000 &
           sleep 5
           curl --fail http://localhost:8000/health
+      - name: requirements.txt da raiz (Vercel) igual ao do back-end
+        working-directory: .
+        run: diff <(grep -v '^#' requirements.txt) backend/requirements.txt
       - name: Smoke test do adaptador da Vercel (api/index.py)
         working-directory: .
         env:
