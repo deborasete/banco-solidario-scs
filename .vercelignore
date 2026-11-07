@@ -1,0 +1,4 @@
+backend/tests
+backend/.venv
+**/__pycache__
+docs/evidencias

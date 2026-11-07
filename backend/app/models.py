@@ -167,3 +167,22 @@ class ItemRetirada(Base):
 
     retirada: Mapped[Retirada] = relationship(back_populates="itens")
     item: Mapped[ItemDoado] = relationship()
+
+
+class TokenRevogado(Base):
+    """Sessões encerradas pelo botão Sair; ficam no banco para valer em todas as instâncias (serverless)."""
+
+    __tablename__ = "token_revogado"
+
+    jti: Mapped[str] = mapped_column(String(36), primary_key=True)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class FalhaLogin(Base):
+    """Tentativas de login com erro, por e-mail e por IP, usadas no bloqueio temporário (RNF01)."""
+
+    __tablename__ = "falha_login"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    chave: Mapped[str] = mapped_column(String(200), index=True)
+    quando: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_agora, index=True)

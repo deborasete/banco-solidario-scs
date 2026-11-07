@@ -12,8 +12,10 @@ class Base(DeclarativeBase):
 
 
 def make_engine(url: str):
-    kwargs = {"connect_args": {"check_same_thread": False}} if url.startswith("sqlite") else {}
-    return create_engine(url, **kwargs)
+    if url.startswith("sqlite"):
+        return create_engine(url, connect_args={"check_same_thread": False})
+    # Na nuvem (serverless + Neon) a conexão pode ter sido encerrada entre requisições.
+    return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=2, pool_recycle=300)
 
 
 engine = make_engine(settings.database_url)

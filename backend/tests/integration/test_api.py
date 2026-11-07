@@ -38,6 +38,24 @@ def test_logout_revoga_token(client, h_voluntario):
     assert client.get("/auth/me", headers=h_voluntario).status_code == 401
 
 
+def test_bloqueio_e_revogacao_valem_em_outra_instancia(client, db_session, voluntario, h_voluntario):
+    """Na nuvem (serverless) cada requisição pode cair numa instância nova: o estado fica no banco."""
+    from app.security import LimitadorLogin, ListaRevogacao
+
+    for _ in range(5):
+        client.post("/auth/login", json={"email": voluntario.email, "senha": "errada"})
+    assert LimitadorLogin(5, 900).bloqueado(db_session, f"email:{voluntario.email}")
+    client.post("/auth/logout", headers=h_voluntario)
+    from app.security import decodificar_token
+    jti = decodificar_token(h_voluntario["Authorization"].split()[1])["jti"]
+    assert ListaRevogacao().revogado(db_session, jti)
+
+
+def test_health_confirma_banco(client):
+    r = client.get("/health")
+    assert r.status_code == 200 and r.json()["banco"] == "ok"
+
+
 def test_senha_armazenada_somente_como_hash(db_session, voluntario):
     u = db_session.get(Usuario, voluntario.id)
     assert u.senha_hash.startswith("$argon2id$")

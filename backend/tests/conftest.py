@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
 from app.models import EntidadeBeneficiaria, Perfil, TipoEntidade, Usuario
-from app.security import gerar_hash, limitador, revogacao
+from app.security import gerar_hash
 
 SENHA = "Senha-Forte-2026"
 
@@ -33,8 +33,6 @@ def client(db_session):
         yield db_session
 
     app.dependency_overrides[get_db] = _get_db
-    limitador._falhas.clear()
-    revogacao._jtis.clear()
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

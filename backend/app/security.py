@@ -1,12 +1,12 @@
 """Autenticação (RNF01): hash Argon2, JWT de curta duração, revogação e bloqueio por tentativas."""
-import time
 import uuid
-from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 import jwt
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
+from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
 
 from .config import settings
 
@@ -48,18 +48,21 @@ def decodificar_token(token: str) -> dict:
 
 
 class ListaRevogacao:
-    """Tokens encerrados pelo botão Sair. Em produção, mover para o banco ou Redis."""
+    """Tokens encerrados pelo botão Sair, guardados no banco (valem em qualquer instância)."""
 
-    def __init__(self) -> None:
-        self._jtis: dict[str, float] = {}
+    def revogar(self, db: Session, jti: str, exp: float) -> None:
+        from .models import TokenRevogado
 
-    def revogar(self, jti: str, exp: float) -> None:
-        self._jtis[jti] = exp
+        agora = datetime.now(timezone.utc)
+        db.execute(delete(TokenRevogado).where(TokenRevogado.expira_em < agora))
+        if db.get(TokenRevogado, jti) is None:
+            db.add(TokenRevogado(jti=jti, expira_em=datetime.fromtimestamp(exp, timezone.utc)))
+        db.commit()
 
-    def revogado(self, jti: str) -> bool:
-        agora = time.time()
-        self._jtis = {k: v for k, v in self._jtis.items() if v > agora}
-        return jti in self._jtis
+    def revogado(self, db: Session, jti: str) -> bool:
+        from .models import TokenRevogado
+
+        return db.get(TokenRevogado, jti) is not None
 
 
 class LimitadorLogin:
@@ -68,23 +71,26 @@ class LimitadorLogin:
     def __init__(self, maximo: int, janela_seg: int) -> None:
         self.maximo = maximo
         self.janela = janela_seg
-        self._falhas: dict[str, deque] = defaultdict(deque)
 
-    def _limpar(self, chave: str) -> None:
-        q = self._falhas[chave]
-        limite = time.time() - self.janela
-        while q and q[0] < limite:
-            q.popleft()
+    def bloqueado(self, db: Session, chave: str) -> bool:
+        from .models import FalhaLogin
 
-    def bloqueado(self, chave: str) -> bool:
-        self._limpar(chave)
-        return len(self._falhas[chave]) >= self.maximo
+        inicio = datetime.now(timezone.utc) - timedelta(seconds=self.janela)
+        db.execute(delete(FalhaLogin).where(FalhaLogin.quando < inicio))
+        total = db.scalar(select(func.count()).select_from(FalhaLogin).where(FalhaLogin.chave == chave))
+        return (total or 0) >= self.maximo
 
-    def registrar_falha(self, chave: str) -> None:
-        self._falhas[chave].append(time.time())
+    def registrar_falha(self, db: Session, chave: str) -> None:
+        from .models import FalhaLogin
 
-    def limpar(self, chave: str) -> None:
-        self._falhas.pop(chave, None)
+        db.add(FalhaLogin(chave=chave[:200]))
+        db.commit()
+
+    def limpar(self, db: Session, chave: str) -> None:
+        from .models import FalhaLogin
+
+        db.execute(delete(FalhaLogin).where(FalhaLogin.chave == chave))
+        db.commit()
 
 
 revogacao = ListaRevogacao()
