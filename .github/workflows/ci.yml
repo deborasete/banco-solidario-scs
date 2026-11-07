@@ -44,6 +44,17 @@ jobs:
           uvicorn app.main:app --port 8000 &
           sleep 5
           curl --fail http://localhost:8000/health
+      - name: Smoke test do adaptador da Vercel (api/index.py)
+        working-directory: .
+        env:
+          DATABASE_URL: postgres://bss:bss@localhost:5432/banco_solidario
+          BSS_JWT_SECRET: ci-apenas-chave-de-teste-com-mais-de-32-bytes
+          BSS_SEED_EMAIL: ci-vercel@exemplo.org
+          BSS_SEED_SENHA: Ci-Senha-Forte-2026
+        run: |
+          uvicorn api.index:app --port 8001 &
+          sleep 5
+          curl --fail http://localhost:8001/api/health
       - name: Auditoria de dependências (pip-audit)
         run: pip-audit -r requirements.txt
       - uses: actions/upload-artifact@v4

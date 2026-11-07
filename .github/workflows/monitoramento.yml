@@ -1,0 +1,50 @@
+name: Monitoramento
+
+# Verifica a cada 30 minutos se o app publicado responde e se o banco está acessível.
+# Se falhar, o job fica vermelho (o GitHub avisa por e-mail) e uma issue "Alerta" é aberta.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  APP_URL: ${{ vars.APP_URL || 'https://banco-solidario-scs.vercel.app' }}
+
+jobs:
+  health:
+    name: Disponibilidade e tempo de resposta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checar /api/health e a página inicial
+        id: check
+        run: |
+          set -o pipefail
+          for i in 1 2 3; do
+            if curl -sS --fail --max-time 20 -o health.json \
+                 -w "%{http_code} %{time_total}\n" "$APP_URL/api/health" | tee resultado.txt; then
+              break
+            fi
+            echo "Tentativa $i falhou; nova tentativa em 20 s (pode ser partida a frio)."; sleep 20
+          done
+          grep -q '"banco":"ok"' health.json
+          curl -sS --fail --max-time 20 -o /dev/null "$APP_URL/"
+          read codigo tempo < resultado.txt
+          echo "| Verificação | Resultado |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| API /api/health | HTTP $codigo em ${tempo}s |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Banco | $(cat health.json) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Página inicial | OK |" >> "$GITHUB_STEP_SUMMARY"
+      - name: Abrir alerta se o app estiver fora do ar
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue list -R "$GITHUB_REPOSITORY" --state open --search "Alerta: app fora do ar" --json number -q '.[0].number' > aberta.txt || true
+          if [ ! -s aberta.txt ]; then
+            gh issue create -R "$GITHUB_REPOSITORY" --title "Alerta: app fora do ar" \
+              --body "O monitoramento não conseguiu acessar $APP_URL em $(date -u '+%d/%m/%Y %H:%M') UTC. Execução: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
