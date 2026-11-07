@@ -79,6 +79,18 @@ def test_estoque_ordenado_por_validade(client, h_voluntario):
     assert e["resumo"][0]["saldo_total"] == "27.00"
 
 
+def test_lotes_iguais_trazem_recebimento_e_canal_em_ordem_fifo(client, h_voluntario):
+    cedo = _doacao([_hortifruti("12", 3)], canal="SEDE")
+    cedo["data_recebimento"] = "2026-11-07T08:00:00+00:00"
+    tarde = _doacao([_hortifruti("12", 3)], canal="DRIVE_THRU")
+    tarde["data_recebimento"] = "2026-11-07T15:00:00+00:00"
+    for payload in (tarde, cedo):
+        assert client.post("/doacoes", json=payload, headers=h_voluntario).status_code == 201
+    lotes = client.get("/estoque", headers=h_voluntario).json()["vencem_primeiro"]
+    assert [lote["canal"] for lote in lotes] == ["SEDE", "DRIVE_THRU"]
+    assert lotes[0]["data_recebimento"].startswith("2026-11-07T08:00")
+
+
 # ---------- RF03: entidades ----------
 def test_cnpj_duplicado_recusado(client, h_coordenacao):
     dados = {"nome": "Associação Teste", "cnpj": "11.444.777/0001-61", "tipo": "ASSOCIACAO",
