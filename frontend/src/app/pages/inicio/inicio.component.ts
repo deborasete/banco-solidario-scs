@@ -26,10 +26,10 @@ import { Estoque } from '../../core/modelos';
           {{ fila.online() ? '✓' : '!' }}
         </span>
         <div>
-          {{ fila.online() ? 'Online' : 'Sem internet' }}<br />
+          {{ fila.online() ? 'Conectado à internet' : 'Sem internet: pode registrar, enviamos depois' }}<br />
           <span style="font-weight:400">
-            @if (fila.pendentes() > 0) { {{ fila.pendentes() }} doação(ões) aguardando envio }
-            @else { Tudo enviado }
+            @if (fila.pendentes() > 0) { {{ fila.pendentes() }} doação(ões) salvas no celular, aguardando envio }
+            @else { Nenhuma doação aguardando envio }
           </span>
         </div>
       </div>
