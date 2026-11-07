@@ -24,7 +24,7 @@ internet), estoque com alerta de validade e retiradas por entidade assistencial.
 Cliente-servidor com back-end monolítico em camadas:
 
 ```
-frontend/  Angular 18 (PWA, service worker, fila offline com Dexie/IndexedDB)
+frontend/  Angular 22 (PWA, service worker, fila offline com Dexie/IndexedDB)
 backend/   Python 3.12 + FastAPI
   app/routers/   camada de API (rotas, autenticação e autorização por perfil)
   app/services/  regras de negócio (testáveis sem banco)
@@ -58,13 +58,18 @@ npx ng serve                    # http://localhost:4200
 ## Testes e qualidade
 
 ```bash
-cd backend && pytest --cov=app        # 35 testes (unitários + integração), cobertura ≥ 80%
+cd backend && pytest --cov=app        # 37 testes (unitários + integração), cobertura ≥ 80%
 cd frontend && npx ng test --watch=false
 ```
 
 A pipeline de integração contínua (`.github/workflows/ci.yml`) roda a cada push e pull request: lint (ruff),
 testes com cobertura mínima, smoke test com PostgreSQL real, build de produção do PWA, testes do front-end e
 auditoria de dependências (pip-audit e npm audit).
+
+## Publicação e monitoramento
+
+O app está publicado na Vercel (PWA + API serverless + PostgreSQL Neon) e é verificado a cada 30 minutos por um
+workflow do GitHub Actions. Detalhes em [`docs/deploy-e-monitoramento.md`](docs/deploy-e-monitoramento.md).
 
 ## Fluxo de trabalho no Git
 
