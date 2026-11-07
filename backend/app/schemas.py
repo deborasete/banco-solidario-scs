@@ -135,6 +135,9 @@ class DoacaoOut(BaseModel):
 class LoteEstoque(ItemOut):
     dias_para_vencer: int | None
     alerta: str | None
+    # Feedback da 1ª rodada: lotes iguais precisam ser distinguíveis na tela.
+    data_recebimento: datetime | None = None
+    canal: Canal | None = None
 
 
 class ResumoCategoria(BaseModel):
