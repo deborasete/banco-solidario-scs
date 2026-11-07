@@ -2,12 +2,14 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from .config import settings
-from .database import Base, engine
+from .database import Base, engine, get_db
 from .routers import auth, doacoes, entidades, estoque, retiradas
 
 log = logging.getLogger("banco_solidario")
@@ -22,7 +24,7 @@ async def lifespan(_: "FastAPI"):
 
 app = FastAPI(
     title="Banco Solidário SCS – API",
-    version="0.3.0",
+    version="1.0.0",
     description="Gestão de doações, estoque e retiradas do Banco de Alimentos (MVP acadêmico).",
     debug=settings.debug,
     lifespan=lifespan,
@@ -54,8 +56,14 @@ async def erro_generico(request: Request, exc: Exception):
 
 
 @app.get("/health", tags=["infra"])
-def health():
-    return {"status": "ok"}
+def health(db: Session = Depends(get_db)):
+    """Usado pelo monitoramento: confirma que a API responde e que o banco está acessível."""
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        log.exception("Banco indisponível no health check")
+        return JSONResponse(status_code=503, content={"status": "erro", "banco": "indisponivel"})
+    return {"status": "ok", "banco": "ok", "versao": app.version}
 
 
 for r in (auth.router, doacoes.router, estoque.router, entidades.router, retiradas.router):

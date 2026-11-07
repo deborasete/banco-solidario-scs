@@ -26,6 +26,46 @@ from .models import (
 from .security import gerar_hash, senha_aceitavel
 
 
+def criar_demo(db) -> bool:
+    """Entidades e doações fictícias. Não faz nada se já houver doações (idempotente)."""
+    if db.scalar(select(Doacao.id).limit(1)) is not None:
+        return False
+    coord = db.scalar(select(Usuario).where(Usuario.perfil == Perfil.COORDENACAO))
+    if coord is None:
+        raise SystemExit("Crie antes um usuário da coordenação.")
+    db.add_all([
+        EntidadeBeneficiaria(nome="Creche Esperança (fictícia)", cnpj="11222333000181", tipo=TipoEntidade.CRECHE,
+                             publico_atendido=80, responsavel_nome="Responsável Fictício", telefone="11900000000"),
+        EntidadeBeneficiaria(nome="Lar Bem Viver (fictício)", cnpj="11444777000161",
+                             tipo=TipoEntidade.ABRIGO_IDOSOS,
+                             publico_atendido=35, responsavel_nome="Responsável Fictícia", telefone="11900000001"),
+    ])
+    hoje = date.today()
+    d = Doacao(id_local=str(uuid.uuid4()), canal=Canal.DRIVE_THRU, registrado_por=coord.id)
+    for cat, un, q, dias in [
+        (Categoria.HORTIFRUTI, Unidade.KG, "12", 3),
+        (Categoria.HORTIFRUTI, Unidade.KG, "10", 6),
+        (Categoria.LATICINIOS, Unidade.UNIDADE, "4", -1),
+        (Categoria.NAO_PERECIVEL, Unidade.KG, "20", None),
+    ]:
+        d.itens.append(ItemDoado(categoria=cat, unidade=un, quantidade_recebida=Decimal(q), saldo=Decimal(q),
+                                 data_validade=hoje + timedelta(days=dias) if dias is not None else None))
+    db.add(d)
+    db.commit()
+    return True
+
+
+def garantir_coordenacao(db, email: str, senha: str, nome: str = "Coordenação") -> bool:
+    """Cria a coordenação se o e-mail ainda não existir (usado também no primeiro deploy)."""
+    if db.scalar(select(Usuario).where(Usuario.email == email.lower())):
+        return False
+    if not senha_aceitavel(senha):
+        raise SystemExit("Informe uma senha forte com pelo menos 8 caracteres.")
+    db.add(Usuario(nome=nome, email=email.lower(), senha_hash=gerar_hash(senha), perfil=Perfil.COORDENACAO))
+    db.commit()
+    return True
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--email")
@@ -33,40 +73,15 @@ def main() -> None:
     p.add_argument("--senha")
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
-
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     if a.email:
-        if not a.senha or not senha_aceitavel(a.senha):
+        if not a.senha:
             raise SystemExit("Informe uma senha forte com pelo menos 8 caracteres.")
-        if db.scalar(select(Usuario).where(Usuario.email == a.email.lower())):
+        if not garantir_coordenacao(db, a.email, a.senha, a.nome):
             raise SystemExit("E-mail já cadastrado.")
-        db.add(Usuario(nome=a.nome, email=a.email.lower(), senha_hash=gerar_hash(a.senha), perfil=Perfil.COORDENACAO))
-        db.commit()
         print("Usuário da coordenação criado.")
-    if a.demo:
-        coord = db.scalar(select(Usuario).where(Usuario.perfil == Perfil.COORDENACAO))
-        if coord is None:
-            raise SystemExit("Crie antes um usuário da coordenação.")
-        db.add_all([
-            EntidadeBeneficiaria(nome="Creche Esperança (fictícia)", cnpj="11222333000181", tipo=TipoEntidade.CRECHE,
-                                 publico_atendido=80, responsavel_nome="Responsável Fictício", telefone="11900000000"),
-            EntidadeBeneficiaria(nome="Lar Bem Viver (fictício)", cnpj="11444777000161",
-                                 tipo=TipoEntidade.ABRIGO_IDOSOS,
-                                 publico_atendido=35, responsavel_nome="Responsável Fictícia", telefone="11900000001"),
-        ])
-        hoje = date.today()
-        d = Doacao(id_local=str(uuid.uuid4()), canal=Canal.DRIVE_THRU, registrado_por=coord.id)
-        for cat, un, q, dias in [
-            (Categoria.HORTIFRUTI, Unidade.KG, "12", 3),
-            (Categoria.HORTIFRUTI, Unidade.KG, "10", 6),
-            (Categoria.LATICINIOS, Unidade.UNIDADE, "4", -1),
-            (Categoria.NAO_PERECIVEL, Unidade.KG, "20", None),
-        ]:
-            d.itens.append(ItemDoado(categoria=cat, unidade=un, quantidade_recebida=Decimal(q), saldo=Decimal(q),
-                                     data_validade=hoje + timedelta(days=dias) if dias is not None else None))
-        db.add(d)
-        db.commit()
+    if a.demo and criar_demo(db):
         print("Dados fictícios de demonstração criados.")
     db.close()
 

@@ -23,7 +23,7 @@ def usuario_atual(
         payload = decodificar_token(cred.credentials)
     except jwt.PyJWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sessão inválida ou expirada") from None
-    if revogacao.revogado(payload.get("jti", "")):
+    if revogacao.revogado(db, payload.get("jti", "")):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sessão encerrada")
     usuario = db.get(Usuario, payload.get("sub"))
     if usuario is None or not usuario.ativo:
