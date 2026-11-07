@@ -1,12 +1,13 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/auth.service';
 import { FilaOfflineService } from '../../core/fila-offline.service';
 import { mensagemDeErro } from '../../core/http';
-import { CATEGORIAS, Categoria, Estoque, Lote, rotuloCategoria } from '../../core/modelos';
+import { CATEGORIAS, Categoria, Estoque, Lote, rotuloCanal, rotuloCategoria } from '../../core/modelos';
 
 interface Confirmacao {
   enviado: boolean;
@@ -21,11 +22,17 @@ export function classeSelo(l: Lote): string {
   return 'breve';
 }
 
+/** Separa os vencidos (descartar) dos lotes que ainda podem sair, mantendo a ordem da API. */
+export function separarLotes(lotes: Lote[]): { vencidos: Lote[]; aSair: Lote[] } {
+  const vencido = (l: Lote) => l.dias_para_vencer !== null && l.dias_para_vencer < 0;
+  return { vencidos: lotes.filter(vencido), aSair: lotes.filter((l) => !vencido(l)) };
+}
+
 /** Tela 3 – Estoque e alertas (RF02): confirmação, saldo por categoria e lotes por validade. */
 @Component({
   selector: 'bss-estoque',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, NgTemplateOutlet],
   template: `
     <header class="topo">
       <a routerLink="/">← Início</a>
@@ -61,22 +68,46 @@ export function classeSelo(l: Lote): string {
           } @empty { <span class="sec">Nenhum item em estoque.</span> }
         </div>
 
-        <h2 style="font-size:1.05rem;margin:14px 0 8px">Vencem primeiro</h2>
-        <ul style="list-style:none;padding:0;margin:0">
-          @for (l of e.vencem_primeiro; track l.id) {
-            <li class="cartao">
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-                <strong>{{ l.descricao || rotulo(l.categoria) }} · {{ l.saldo }} {{ l.unidade === 'KG' ? 'kg' : 'un' }}</strong>
-                @if (l.alerta) {
-                  <span class="selo" [class]="'selo ' + classe(l)">
-                    <span aria-hidden="true">{{ classe(l) === 'vencido' ? '✕' : classe(l) === 'urgente' ? '!' : '◷' }}</span>{{ l.alerta }}
-                  </span>
+        @if (separar(e.vencem_primeiro); as g) {
+          @if (g.vencidos.length) {
+            <section class="secao-vencidos" aria-labelledby="tit-vencidos">
+              <h2 id="tit-vencidos" style="font-size:1.05rem;margin:14px 0 4px">Vencidos: não entregar</h2>
+              <p class="dica">Separe para descarte. Estes lotes não devem sair para as entidades.</p>
+              <ul style="list-style:none;padding:0;margin:0">
+                @for (l of g.vencidos; track l.id) {
+                  <ng-container *ngTemplateOutlet="cartaoLote; context: { $implicit: l, primeiro: false }" />
                 }
-              </div>
-              <div class="sec">{{ l.data_validade ? 'Validade ' + formatar(l.data_validade) : 'Sem validade' }}</div>
-            </li>
+              </ul>
+            </section>
           }
-        </ul>
+          <h2 style="font-size:1.05rem;margin:14px 0 4px">Próximos a sair</h2>
+          <p class="dica">O primeiro da lista é o que deve sair primeiro.</p>
+          <ul style="list-style:none;padding:0;margin:0">
+            @for (l of g.aSair; track l.id; let primeiro = $first) {
+              <ng-container *ngTemplateOutlet="cartaoLote; context: { $implicit: l, primeiro: primeiro }" />
+            } @empty { <li class="sec">Nenhum lote disponível.</li> }
+          </ul>
+        }
+
+        <ng-template #cartaoLote let-l let-primeiro="primeiro">
+          <li class="cartao">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <strong>{{ l.descricao || rotulo(l.categoria) }} · {{ l.saldo }} {{ l.unidade === 'KG' ? 'kg' : 'un' }}</strong>
+              @if (primeiro) { <span class="selo primeiro"><span aria-hidden="true">➜</span>Sai primeiro</span> }
+              @if (l.alerta) {
+                <span class="selo" [class]="'selo ' + classe(l)">
+                  <span aria-hidden="true">{{ classe(l) === 'vencido' ? '✕' : classe(l) === 'urgente' ? '!' : '◷' }}</span>{{ l.alerta }}
+                </span>
+              }
+            </div>
+            <div class="lote-info">
+              <span>{{ l.data_validade ? 'Validade ' + formatar(l.data_validade) : 'Sem validade' }}</span>
+              @if (l.data_recebimento) { <span>Recebido {{ formatarRecebimento(l.data_recebimento) }}</span> }
+              @if (l.canal) { <span>{{ canal(l.canal) }}</span> }
+              <span>Lote {{ l.id.slice(0, 4).toUpperCase() }}</span>
+            </div>
+          </li>
+        </ng-template>
         @if (e.total_lotes > e.pagina * e.por_pagina) {
           <button class="btn" type="button" style="background:none;color:var(--azul)" (click)="maisPagina()">Mostrar mais</button>
         }
@@ -108,7 +139,15 @@ export class EstoqueComponent implements OnInit {
     this.carregar();
   }
   rotulo = rotuloCategoria;
+  canal = rotuloCanal;
   classe = classeSelo;
+  separar = separarLotes;
+
+  formatarRecebimento(iso: string): string {
+    const d = new Date(iso);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)} às ${p(d.getHours())}h${p(d.getMinutes())}`;
+  }
 
   formatar(iso: string): string {
     const [a, m, d] = iso.split('-');

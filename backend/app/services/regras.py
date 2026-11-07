@@ -1,5 +1,5 @@
 """Regras de negócio puras (sem banco nem HTTP), testáveis com testes unitários."""
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from ..models import PERECIVEIS, Categoria
@@ -44,6 +44,12 @@ def novo_saldo(saldo_atual: Decimal, quantidade_retirada: Decimal) -> Decimal:
     return saldo_atual - quantidade_retirada
 
 
-def chave_ordenacao_estoque(validade: date | None) -> tuple[int, date]:
-    """Perecíveis primeiro, do que vence antes; itens sem validade vão para o fim."""
-    return (1, date.max) if validade is None else (0, validade)
+def chave_ordenacao_estoque(
+    validade: date | None, recebimento: datetime | None = None
+) -> tuple[int, date, datetime]:
+    """Perecíveis primeiro, do que vence antes; itens sem validade vão para o fim.
+
+    Em caso de empate na validade, sai primeiro o lote recebido antes (FIFO).
+    """
+    rec = recebimento.replace(tzinfo=None) if recebimento else datetime.max
+    return (1, date.max, rec) if validade is None else (0, validade, rec)

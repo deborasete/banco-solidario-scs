@@ -1,5 +1,5 @@
 """Testes unitários das regras de negócio (sem banco e sem HTTP)."""
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -53,6 +53,15 @@ def test_novo_saldo_bloqueia_saldo_negativo():
 def test_ordenacao_coloca_sem_validade_no_fim():
     datas = [None, date(2026, 11, 6), date(2026, 11, 3)]
     assert sorted(datas, key=chave_ordenacao_estoque) == [date(2026, 11, 3), date(2026, 11, 6), None]
+
+
+def test_empate_de_validade_sai_primeiro_o_recebido_antes():
+    """Feedback da 1ª rodada: dois lotes iguais confundiam ("qual eu pego?")."""
+    validade = date(2026, 11, 10)
+    cedo = datetime(2026, 11, 7, 8, tzinfo=timezone.utc)
+    tarde = datetime(2026, 11, 7, 15, tzinfo=timezone.utc)
+    assert chave_ordenacao_estoque(validade, cedo) < chave_ordenacao_estoque(validade, tarde)
+    assert chave_ordenacao_estoque(validade, None) > chave_ordenacao_estoque(validade, tarde)
 
 
 def test_item_perecivel_sem_validade_e_rejeitado():

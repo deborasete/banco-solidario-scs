@@ -58,7 +58,7 @@ npx ng serve                    # http://localhost:4200
 ## Testes e qualidade
 
 ```bash
-cd backend && pytest --cov=app        # 33 testes (unitários + integração), cobertura ≥ 80%
+cd backend && pytest --cov=app        # 35 testes (unitários + integração), cobertura ≥ 80%
 cd frontend && npx ng test --watch=false
 ```
 

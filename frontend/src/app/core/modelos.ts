@@ -11,14 +11,20 @@ export const CANAIS: { valor: Canal; rotulo: string }[] = [
   { valor: 'CAMPANHA', rotulo: 'Campanha' },
 ];
 
-export const CATEGORIAS: { valor: Categoria; rotulo: string; icone: string; perecivel: boolean }[] = [
+export const CATEGORIAS: { valor: Categoria; rotulo: string; icone: string; perecivel: boolean; dica?: string }[] = [
   { valor: 'NAO_PERECIVEL', rotulo: 'Não perecível', icone: '🥫', perecivel: false },
   { valor: 'HORTIFRUTI', rotulo: 'Hortifrúti', icone: '🥕', perecivel: true },
   { valor: 'LATICINIOS', rotulo: 'Laticínios', icone: '🥛', perecivel: true },
   { valor: 'PROTEINA', rotulo: 'Proteína', icone: '🍗', perecivel: true },
   { valor: 'HIGIENE_LIMPEZA', rotulo: 'Higiene/Limpeza', icone: '🧴', perecivel: false },
   { valor: 'RACAO', rotulo: 'Ração', icone: '🐾', perecivel: false },
+  // Feedback da 1ª rodada: pão e ovos não tinham lugar claro.
+  { valor: 'OUTROS', rotulo: 'Outros', icone: '📦', perecivel: false, dica: 'pão, ovos e o que não couber acima' },
 ];
+
+export function rotuloCanal(c: Canal | null | undefined): string {
+  return CANAIS.find((x) => x.valor === c)?.rotulo ?? 'Outro canal';
+}
 
 export function rotuloCategoria(c: Categoria): string {
   return CATEGORIAS.find((x) => x.valor === c)?.rotulo ?? 'Outros';
@@ -52,6 +58,8 @@ export interface Lote {
   data_validade: string | null;
   dias_para_vencer: number | null;
   alerta: string | null;
+  data_recebimento?: string | null;
+  canal?: Canal | null;
 }
 
 export interface Estoque {
