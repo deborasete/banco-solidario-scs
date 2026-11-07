@@ -96,7 +96,7 @@ export class EstoqueComponent implements OnInit {
   auth = inject(AuthService);
   fila = inject(FilaOfflineService);
   private http = inject(HttpClient);
-  confirmacao: Confirmacao | null = inject(Router).getCurrentNavigation()?.extras.state?.['confirmacao'] ?? null;
+  confirmacao: Confirmacao | null = inject(Router).currentNavigation()?.extras.state?.['confirmacao'] ?? null;
 
   categoriasPereciveis = CATEGORIAS.filter((c) => c.perecivel);
   estoque = signal<Estoque | null>(null);
