@@ -34,7 +34,7 @@ def consultar_estoque(
         for (c, u), v in sorted(totais.items(), key=lambda kv: kv[0][0].value)
     ]
 
-    itens.sort(key=lambda i: chave_ordenacao_estoque(i.data_validade))
+    itens.sort(key=lambda i: chave_ordenacao_estoque(i.data_validade, i.doacao.data_recebimento))
     inicio = (pagina - 1) * por_pagina
     lotes = [
         LoteEstoque(
@@ -48,6 +48,8 @@ def consultar_estoque(
             status=i.status,
             dias_para_vencer=dias_para_vencer(i.data_validade, hoje),
             alerta=alerta_validade(i.data_validade, hoje, settings.dias_alerta_validade),
+            data_recebimento=i.doacao.data_recebimento,
+            canal=i.doacao.canal,
         )
         for i in itens[inicio : inicio + por_pagina]
     ]
